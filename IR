@@ -1,0 +1,262 @@
+// Robot navigates colored platform to reach black center
+// IR sensors detect edge (no platform below)
+#define IR_Right 1
+#define IR_Left 0
+
+// Color Sensor pins
+#define S0 6
+#define S1 5
+#define S2 3
+#define S3 4
+#define sensorOut 2
+
+// Motor pins
+int IN1 = 4;
+int IN2 = 5;
+int IN3 = 6;
+int IN4 = 7;
+int ENA = 9;   // PWM pin for right motor speed
+int ENB = 10;  // PWM pin for left motor speed
+
+// COLOR-SENSING VARIABLES
+const int redMin = 15;
+const int redMax = 217;
+const int greenMin = 20;
+const int greenMax = 297;
+const int blueMin = 20;
+const int blueMax = 273;
+
+// Variables for final Color values 
+int redValue;
+int greenValue;
+int blueValue;
+
+// Speed settings
+#define BASE_SPEED 150
+#define TURN_SPEED 120
+
+// Black threshold for center detection
+const int blackThreshold = 50;  // Adjust based on testing
+
+void setup() {
+  pinMode(IR_Left, INPUT);
+  pinMode(IR_Right, INPUT);
+  
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
+  pinMode(S3, OUTPUT);
+  pinMode(sensorOut, INPUT);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  digitalWrite(S0, HIGH);
+  digitalWrite(S1, LOW);
+
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Read IR sensors - INVERTED LOGIC
+  // LOW = platform detected (safe)
+  // HIGH = no platform (EDGE!)
+  int left_IR = digitalRead(IR_Left);
+  int right_IR = digitalRead(IR_Right);
+
+  Serial.print("Left IR: ");
+  Serial.print(left_IR);
+  Serial.print(" | Right IR: ");
+  Serial.println(right_IR);
+
+  // EDGE DETECTION - IR sensors output HIGH when there's NO platform
+  if(left_IR == HIGH && right_IR == HIGH){
+    // Both sensors detect NO platform - EDGE AHEAD!
+    Serial.println("EDGE AHEAD - BACKING UP!");
+    stopMotors();
+    delay(200);
+    
+    // Back up
+    backDrive(BASE_SPEED, BASE_SPEED);
+    delay(500);
+    stopMotors();
+    
+    // Turn around to explore different direction
+    spinRight(TURN_SPEED, TURN_SPEED);
+    delay(500);
+    stopMotors();
+    return;
+  }
+  else if(left_IR == HIGH){
+    // Left sensor detects edge - turn right to stay on platform
+    Serial.println("LEFT EDGE, TURN RIGHT");
+    stopMotors();
+    delay(100);
+    spinRight(TURN_SPEED, TURN_SPEED);
+    delay(300);
+    return;
+  }
+  else if(right_IR == HIGH){
+    Serial.println("RIGHT EDGE, TURN LEFT");
+    stopMotors();
+    delay(100);
+    spinLeft(TURN_SPEED, TURN_SPEED);
+    delay(300);
+    return;
+  }
+
+  checkColorAndNavigate();
+  
+  delay(50);
+}
+
+void checkColorAndNavigate() {
+  readColor();
+  
+  Serial.print("RGB Values -> R:");
+  Serial.print(redValue);
+  Serial.print(" G:");
+  Serial.print(greenValue);
+  Serial.print(" B:");
+  Serial.print(blueValue);
+  
+  // Check if we've reached the BLACK center
+  if (isBlack()) {
+    Serial.println("BLACK CENTER REACHED!");
+    stopMotors();
+    delay(10000);
+    return;
+  }
+  
+  // Navigate based on color
+  if (isRed()) {
+    Serial.println("Red detected - Moving forward");
+    forwardDrive(BASE_SPEED, BASE_SPEED);
+  }
+  else if (isBlue()) {
+    Serial.println("Blue detected, Moving forward");
+    forwardDrive(BASE_SPEED, BASE_SPEED);
+  }
+  else if (isGreen()) {
+    Serial.println("Green detected, Moving forward");
+    forwardDrive(BASE_SPEED, BASE_SPEED);
+  }
+  else {
+    // Unknown color - keep exploring
+    Serial.println("Unknown color, exploring");
+    forwardDrive(BASE_SPEED, BASE_SPEED);
+  }
+}
+
+// COLOR READING ----------------------------------------------------------------
+void readColor() {
+  redValue = readRed();
+  delay(20);
+  greenValue = readGreen();
+  delay(20);
+  blueValue = readBlue();
+  delay(20);
+}
+
+int readRed() {
+  long sum = 0;
+  digitalWrite(S2, LOW);
+  digitalWrite(S3, LOW);
+  
+  for (int i = 0; i < 5; i++) { 
+    sum += pulseIn(sensorOut, LOW, 25000);
+  }
+  return map(sum/5, redMin, redMax, 255, 0);
+}
+
+int readGreen() {
+  long sum = 0;
+  digitalWrite(S2, HIGH);
+  digitalWrite(S3, HIGH);
+  
+  for (int i = 0; i < 5; i++) { 
+    sum += pulseIn(sensorOut, LOW, 25000);
+  }
+  return map(sum/5, greenMin, greenMax, 255, 0);
+}
+
+int readBlue() {
+  long sum = 0;
+  digitalWrite(S2, LOW);
+  digitalWrite(S3, HIGH);
+  
+  for (int i = 0; i < 5; i++) {
+    sum += pulseIn(sensorOut, LOW, 25000);
+  }
+  return map(sum/5, blueMin, blueMax, 255, 0);
+}
+
+// COLOR CLASSIFICATION ----------------------------------------------------------------
+bool isBlack() {
+  // Black = all RGB values are LOW
+  return (redValue < blackThreshold && greenValue < blackThreshold && blueValue < blackThreshold);
+}
+
+bool isRed() {
+  return (redValue > greenValue && redValue > blueValue && redValue > 100);
+}
+
+bool isBlue() {
+  return (blueValue > redValue && blueValue > greenValue && blueValue > 100);
+}
+
+bool isGreen() {
+  return (greenValue > redValue && greenValue > blueValue && greenValue > 100);
+}
+
+// MOTOR FUNCTIONS ----------------------------------------------------------------
+void setSpeed(int rightSpeed, int leftSpeed) {
+  rightSpeed = constrain(rightSpeed, 0, 255);
+  leftSpeed = constrain(leftSpeed, 0, 255);
+  analogWrite(ENA, rightSpeed);
+  analogWrite(ENB, leftSpeed);
+}
+
+void forwardDrive(int speedleft, int speedright) {
+  setSpeed(speedright, speedleft);
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void backDrive(int speedleft, int speedright) {
+  setSpeed(speedright, speedleft);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void spinLeft(int speedleft, int speedright) {
+  setSpeed(speedright, speedleft);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void spinRight(int speedleft, int speedright) {
+  setSpeed(speedright, speedleft);
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void stopMotors() {
+  setSpeed(0, 0);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
