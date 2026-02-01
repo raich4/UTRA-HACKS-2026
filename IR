@@ -70,10 +70,10 @@ void loop() {
 
   Serial.print("Left IR: ");
   Serial.print(left_IR);
-  Serial.print(" | Right IR: ");
+  Serial.print("Right IR: ");
   Serial.println(right_IR);
 
-  // EDGE DETECTION - IR sensors output HIGH when there's NO platform
+  // EDGE DETECTION IR sensors output HIGH when there's no platform
   if(left_IR == HIGH && right_IR == HIGH){
     // Both sensors detect NO platform - EDGE AHEAD!
     Serial.println("EDGE AHEAD - BACKING UP!");
@@ -92,7 +92,6 @@ void loop() {
     return;
   }
   else if(left_IR == HIGH){
-    // Left sensor detects edge - turn right to stay on platform
     Serial.println("LEFT EDGE, TURN RIGHT");
     stopMotors();
     delay(100);
@@ -152,7 +151,6 @@ void checkColorAndNavigate() {
   }
 }
 
-// COLOR READING ----------------------------------------------------------------
 void readColor() {
   redValue = readRed();
   delay(20);
@@ -195,7 +193,6 @@ int readBlue() {
   return map(sum/5, blueMin, blueMax, 255, 0);
 }
 
-// COLOR CLASSIFICATION ----------------------------------------------------------------
 bool isBlack() {
   // Black = all RGB values are LOW
   return (redValue < blackThreshold && greenValue < blackThreshold && blueValue < blackThreshold);
@@ -213,7 +210,6 @@ bool isGreen() {
   return (greenValue > redValue && greenValue > blueValue && greenValue > 100);
 }
 
-// MOTOR FUNCTIONS ----------------------------------------------------------------
 void setSpeed(int rightSpeed, int leftSpeed) {
   rightSpeed = constrain(rightSpeed, 0, 255);
   leftSpeed = constrain(leftSpeed, 0, 255);
